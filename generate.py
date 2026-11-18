@@ -21,7 +21,7 @@ def main():
   clip=out/f'clip{i}.mp4';run('ffmpeg','-y','-loop','1','-framerate','25','-i',str(still),'-i',str(wav),'-c:v','libx264','-tune','stillimage','-c:a','aac','-b:a','128k','-pix_fmt','yuv420p','-shortest',str(clip));clips.append(clip)
  (out/'concat.txt').write_text(''.join("file '"+str(c.resolve())+"'\n" for c in clips))
  run('ffmpeg','-y','-f','concat','-safe','0','-i',str(out/'concat.txt'),'-c','copy',str(out / ('playwithjey_' + a.format + '.mp4')))
- thumb=Image.open(out/'frame0.png');thumb.save(out/'thumbnail_'+a.format+'.png')
+ thumb=Image.open(out/'frame0.png');thumb.save(out / ('thumbnail_' + a.format + '.png'))
  (out/'metadata.txt').write_text(data['title']+'\n\n'+data['description']+'\n')
  print('Created MP4, thumbnail and metadata in output/')
 if __name__=='__main__':main()
