@@ -1,27 +1,99 @@
-import argparse, json, subprocess, pathlib, textwrap
+
+import argparse
+import json
+import pathlib
+import subprocess
+import textwrap
+import wave
 from PIL import Image, ImageDraw, ImageFont
-ROOT=pathlib.Path(__file__).parent
-font='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
-def run(*args): subprocess.run(args,check=True)
+
+ROOT = pathlib.Path(__file__).parent
+OUT = ROOT / "output"
+OUT.mkdir(exist_ok=True)
+
+FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
+def run(*args):
+    subprocess.run([str(x) for x in args], check=True)
+
 def main():
- p=argparse.ArgumentParser();p.add_argument('--format',choices=['short','long'],default='short');a=p.parse_args()
- data=json.loads((ROOT/'topics.json').read_text())[a.format]; out=ROOT/'output';out.mkdir(exist_ok=True)
- w,h=(720,1280) if a.format=='short' else (1280,720)
- segments=data['segments']; clips=[]
- for i,s in enumerate(segments):
-  img=Image.new('RGB',(w,h),(13,13,22));d=ImageDraw.Draw(img)
-  d.rectangle((0,0,w,20),fill=(235,35,58));d.text((45,50),'PLAYWITHJEY',font=ImageFont.truetype(font,35),fill='white')
-  lines=textwrap.wrap(s['heading'],width=17 if a.format=='short' else 31)
-  ft=ImageFont.truetype(font,57 if a.format=='short' else 66)
-  y=h//3
-  for line in lines:d.text((45,y),line,font=ft,fill=(255,255,255));y+=80
-  d.text((45,h-100),'GTA 6  |  GAMING ANALYSIS',font=ImageFont.truetype(font,23),fill=(255,75,90))
-  still=out/f'frame{i}.png';img.save(still)
-  wav=out/f'voice{i}.wav';run('espeak-ng','-v','en-us','-s','145','-w',str(wav),s['narration'])
-  clip=out/f'clip{i}.mp4';run('ffmpeg','-y','-loop','1','-framerate','25','-i',str(still),'-i',str(wav),'-c:v','libx264','-tune','stillimage','-c:a','aac','-b:a','128k','-pix_fmt','yuv420p','-shortest',str(clip));clips.append(clip)
- (out/'concat.txt').write_text(''.join("file '"+str(c.resolve())+"'\n" for c in clips))
- run('ffmpeg','-y','-f','concat','-safe','0','-i',str(out/'concat.txt'),'-c','copy',str(out / ('playwithjey_' + a.format + '.mp4')))
- thumb=Image.open(out/'frame0.png');thumb.save(out / ('thumbnail_' + a.format + '.png'))
- (out/'metadata.txt').write_text(data['title']+'\n\n'+data['description']+'\n')
- print('Created MP4, thumbnail and metadata in output/')
-if __name__=='__main__':main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--format", choices=["short", "long"],
+        default="short"
+    )
+    args = parser.parse_args()
+
+    w, h = (720, 1280) if args.format == "short" else (1280, 720)
+
+    topics = [
+        ("GTA 6", "PLAYWITHJEY ORIGINAL ANALYSIS"),
+        ("VICE CITY", "What could the open world offer?"),
+        ("GAMEPLAY", "What features are you excited for?"),
+        ("ROCKSTAR", "Wait for official announcements"),
+        ("YOUR OPINION", "Tell us in the comments!")
+    ]
+
+    frames = []
+    for i, (heading, subtitle) in enumerate(topics):
+        img = Image.new("RGB", (w, h), (12, 18, 35))
+        d = ImageDraw.Draw(img)
+        d.rectangle((0, 0, w, 18), fill=(255, 65, 120))
+        d.text((40, 65), "PLAYWITHJEY",
+               font=ImageFont.truetype(FONT, 35),
+               fill="white")
+        d.text((40, h // 3), heading,
+               font=ImageFont.truetype(FONT, 58),
+               fill=(255, 90, 150))
+        f = ImageFont.truetype(FONT, 27)
+        y = h // 3 + 110
+        for line in textwrap.wrap(subtitle, 30):
+            d.text((40, y), line, font=f, fill="white")
+            y += 45
+        d.text((40, h - 100), "Original Commentary | PlayWithJey",
+               font=ImageFont.truetype(FONT, 19),
+               fill=(180, 190, 210))
+        path = OUT / f"frame{i}.png"
+        img.save(path)
+        frames.append(path)
+
+    # Generate silent audio for an original visual explainer.
+    audio = OUT / "silent.wav"
+    with wave.open(str(audio), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(22050)
+        wf.writeframes(b"\x00\x00" * 22050 * 20)
+
+    clips = []
+    for i, frame in enumerate(frames):
+        clip = OUT / f"clip{i}.mp4"
+        run("ffmpeg", "-y", "-loop", "1",
+            "-framerate", "25", "-i", frame,
+            "-t", "4", "-c:v", "libx264",
+            "-pix_fmt", "yuv420p", clip)
+        clips.append(clip)
+
+    concat = OUT / "concat.txt"
+    concat.write_text(
+        "".join(f"file '{p.resolve()}'\n" for p in clips)
+    )
+
+    video = OUT / f"playwithjey_{args.format}.mp4"
+    run("ffmpeg", "-y", "-f", "concat", "-safe", "0",
+        "-i", concat, "-i", audio,
+        "-c:v", "copy", "-c:a", "aac",
+        "-shortest", video)
+
+    (OUT / "metadata.txt").write_text(
+        "Title: GTA 6 - What We Want To See | PlayWithJey\n"
+        "Description: Original GTA 6 discussion and analysis. "
+        "Not official gameplay footage.\n"
+        "#GTA6 #PlayWithJey #Gaming"
+    )
+
+    print("Video created:", video)
+
+if __name__ == "__main__":
+    main()
+ 
